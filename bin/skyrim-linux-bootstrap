@@ -26,6 +26,7 @@ applications_dir="$data_home/applications"
 bin_home="$HOME/.local/bin"
 backup_root="$state_home/backups"
 mkdir -p "$state_home" "$config_home"
+steamcmd_path="/var/tmp/steamcmd/steamcmd.sh"
 
 log() { printf '[slb] %s\n' "$*"; }
 warn() { printf '[slb] WARNING: %s\n' "$*" >&2; }
@@ -268,6 +269,13 @@ install_deps() {
       install_flatpak_protontricks
       ;;
   esac
+}
+
+install_steam_cmd() {
+  mkdir -p /var/tmp/steamcmd
+  cd /var/tmp/steamcmd
+  curl -O https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz
+  tar -xvf ./steamcmd_linux.tar.gz
 }
 
 install_flatpak_protontricks() {
@@ -560,6 +568,36 @@ install_desktop() {
   log "Desktop launcher installed: $desktop"
 }
 
+downgrade() {
+  require_linux
+  install_deps
+  install_steam_cmd
+  skyrim="$(find_skyrim_dir)" || die "Skyrim installation not found."
+  echo "\n"
+  read -p "Steam username: " STEAM_USER
+  echo "Downloading..."
+  cd /var/tmp/steamcmd/
+  $steamcmd_path +login "$STEAM_USER" \
+              +download_depot 489830 489831 8442952117333549665 \
+              +download_depot 489830 489832 8042843504692938467 \
+              +download_depot 489830 489833 1914580699073641964 \
+              +quit
+  CONTENT_PATH="/var/tmp/steamcmd/linux32/steamapps/content/app_489830"
+  echo "Source folder: $CONTENT_PATH"
+  echo "Destination folder: $skyrim"
+  echo "Downgrading..."
+  for depot_dir in "$CONTENT_PATH"/depot_*/; do
+    if [ -d "$depot_dir" ]; then
+      echo "Copying $depot_dir to $skyrim"
+      cp -r "$depot_dir"* "$skyrim/"
+    else
+      echo "No depot folder inside content app"
+      exit 1
+    fi
+  done
+  esac
+}
+
 gui() {
   require_linux
   local choice installer resolution width height
@@ -697,6 +735,7 @@ case "$command_name" in
   fix-audio) fix_audio "$@" ;;
   install-desktop) install_desktop "$@" ;;
   gui) gui "$@" ;;
+  downgrade) downgrade "$@" ;;
   version|--version|-V) printf '%s\n' "$version" ;;
   *) usage >&2; exit 2 ;;
 esac
